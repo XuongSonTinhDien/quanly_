@@ -8,7 +8,7 @@ import streamlit as st
 # =============================================================
 DB_FILE = "dulieu_sơn tĩnh điện.db"
 TEN_CO_SO = "XƯỞNG SƠN TĨNH ĐIỆN HƯỞNG THỦY"
-SDT_CHU_XUONG = "0979.141.588"
+SDT_CHU_XUONG = "0979.141.588...0354.179.792"
 DIA_CHI_XUONG = "Tân Lập Hợp Lý Phú Thọ"
 STK_NGAN_HANG = "104869545034...0979141588"
 TEN_NGAN_HANG = "VietinBank - CN VINH PHUC"
