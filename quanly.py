@@ -6,7 +6,7 @@ import streamlit as st
 # =============================================================
 # CẤU HÌNH HỆ THỐNG & THÔNG TIN CƠ SỞ
 # =============================================================
-DB_FILE = "dulieu_sơn tĩnh điện.db"
+DB_FILE = "dulieu_son tĩnh điện.db"
 TEN_CO_SO = "XƯỞNG SƠN TĨNH ĐIỆN HƯỞNG THỦY"
 SDT_CHU_XUONG = "0979.141.588...0354.179.792"
 DIA_CHI_XUONG = "Tân Lập Hợp Lý Phú Thọ"
