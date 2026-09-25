@@ -10,7 +10,7 @@ DB_FILE = "dulieu_sơn tĩnh điện.db"
 TEN_CO_SO = "XƯỞNG SƠN TĨNH ĐIỆN HƯỞNG THỦY"
 SDT_CHU_XUONG = "0979.141.588"
 DIA_CHI_XUONG = "Tân Lập Hợp Lý Phú Thọ"
-STK_NGAN_HANG = "104869545034"
+STK_NGAN_HANG = "104869545034...0979141588"
 TEN_NGAN_HANG = "VietinBank - CN VINH PHUC"
 TEN_CHU_TK = "LE VAN HUONG"
 
@@ -104,8 +104,8 @@ with tab1:
     col_trai, col_phai = st.columns([1, 1.3])
     
     with col_trai:
-        st.header("🛠️ Nhập Liệu")
-        ten_nhap_raw = st.text_input("Gõ tên khách hàng để tra cứu:", value="tuyen k1")
+        st.header("🛠️ Danh Sách Thống Kê Vật Liệu")
+        ten_nhap_raw = st.text_input("Gõ tên khách hàng để tra cứu:", value="tuyển k1")
         ten_chuan_hoa = " ".join([w.strip() for w in ten_nhap_raw.strip().split()])
         sdt_mac_dinh, diachi_mac_dinh, nocu_mac_dinh = "", "", 0.0
         khach_cu = False
@@ -167,7 +167,7 @@ with tab1:
                 else:
                     st.error("🔒 Hãy lưu thông tin khách trước khi kích lưu giao dịch!")
     with col_phai:
-        st.header("📋 Bộ Lọc & Đối Soát")
+        st.header("📋 Hóa Đơn Khách Hàng")
         st.selectbox("Thời gian xem hóa đơn:", options=["Tất cả thời gian"])
         rows_html, tong_phat_sinh, tong_da_tra = "", 0.0, 0.0
 
