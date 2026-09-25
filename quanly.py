@@ -289,3 +289,12 @@ with tab2:
         st.components.v1.html(html_bang_tong_hop, height=600, scrolling=True)
     else:
         st.info("💡 Chưa có dữ liệu khách hàng nào trong hệ thống.")
+
+# Đoạn code tạo nút tải dữ liệu về máy (Dán sát lề trái dưới cùng file)
+with open(DB_FILE, "rb") as f:
+    st.download_button(
+        label="📥 Tải file dữ liệu mới nhất về máy tính",
+        data=f,
+        file_name=DB_FILE,
+        mime="application/octet-stream"
+    )
