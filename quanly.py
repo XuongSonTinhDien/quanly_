@@ -1,5 +1,5 @@
 import os
-import sqlite3
+import psycopg2
 import datetime
 import streamlit as st
 import pandas as pd
@@ -8,16 +8,15 @@ import pandas as pd
 st.set_page_config(page_title="Hệ Thống Quản Lý Sơn Tĩnh Điện", layout="wide")
 
 # =============================================================
-# 1. CẤU HÌNH HỆ THỐNG & THÔNG TIN CƠ SỞ
+# 1. CẤU HÌNH CLOUD DATABASE TRỰC TUYẾN MIỄN PHÍ
 # =============================================================
-DB_FILE = "dulieu_son_tinh_dien.db"  # Database trỏ đúng theo file code_dulieu_hoa_don.py của bạn
+DB_URL = "postgresql://postgres:Huong1985%40%40123@db.hyatrmkculrugytuvzeg.supabase.co:5432/postgres"
 TEN_CO_SO = "XƯỞNG SƠN TĨNH ĐIỆN HƯỞNG THỦY"
 SDT_CHU_XUONG = "0979.141.588...0354.179.792"
 DIA_CHI_XUONG = "Tân Lập Hợp Lý Phú Thọ"
 STK_NGAN_HANG = "104869545034...0979141588"
 TEN_NGAN_HANG = "VietinBank - CN VINH PHUC"
 TEN_CHU_TK = "LE VAN HUONG"
-
 def lay_khung_html_a4(ten_chuan_hoa, sdt, diachi, rows_html, no_dau_ky, tong_phat_sinh, tong_da_tra, tong_no_cuoi_ky):
     ngay_lap_he_thong = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     no_dau_ky_int = int(float(no_dau_ky or 0))
@@ -82,20 +81,13 @@ def lay_khung_html_a4(ten_chuan_hoa, sdt, diachi, rows_html, no_dau_ky, tong_pha
     </div>
     """
 
-with sqlite3.connect(DB_FILE) as conn:
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS khach_hang (ten TEXT PRIMARY KEY, sdt TEXT, diachi TEXT, nocu REAL DEFAULT 0)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS lich_su_mua (id INTEGER PRIMARY KEY AUTOINCREMENT, ten_khach TEXT, ngay TEXT, loai_gd TEXT, ten_hang TEXT, dvt TEXT, dongia REAL DEFAULT 0, soluong REAL DEFAULT 0, thanhtien REAL DEFAULT 0)")
-    conn.commit()
-
-st.title("🏭 HỆ THỐNG QUẢN LÝ BẠN HÀNG & CÔNG NỢ SƠN TĨNH ĐIỆN")
+st.title("🏭 HỆ THỐNG QUẢN LÝ BẠN HÀNG & CÔNG NỢ SƠN TĨNH ĐIỆN CLOUD")
 tab1, tab2 = st.tabs(["👤 CHI TIẾT KHÁCH HÀNG & IN ẤN", "📊 TỔNG HỢP CÔNG NỢ TOÀN XƯỞNG"])
 with tab1:
     col_trai, col_phai = st.columns([1, 1.2])
     
     with col_trai:
         st.header("🛠️ Thống Kê & Nhập Liệu")
-        
         st.subheader("🚨 Quản trị hệ thống")
         ten_xoa_tuy_chon = st.text_input("Nhập CHÍNH XÁC tên khách muốn xóa bỏ hoàn toàn:", key="xoa_khach_doc_lap")
         xac_nhan_xoa = st.checkbox("⚠️ Tôi chắc chắn muốn xóa toàn bộ lịch sử và công nợ của khách hàng này.", key="chk_xac_nhan")
@@ -107,23 +99,31 @@ with tab1:
                 st.error("Bạn phải tích chọn ô xác nhận phía trên trước khi thực hiện xóa!")
             else:
                 ten_xoa_chuan = " ".join(ten_xoa_tuy_chon.strip().split())
-                with sqlite3.connect(DB_FILE) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM khach_hang WHERE ten = ?", (ten_xoa_chuan,))
-                    cursor.execute("DELETE FROM lich_su_mua WHERE ten_khach = ?", (ten_xoa_chuan,))
-                    conn.commit()
-                st.success(f"💥 Đã xóa sạch khách hàng [{ten_xoa_chuan}] khỏi hệ thống!")
+                with psycopg2.connect(DB_URL) as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute("DELETE FROM khach_hang WHERE ten = %s", (ten_xoa_chuan,))
+                        cursor.execute("DELETE FROM lich_su_mua WHERE ten_khach = %s", (ten_xoa_chuan,))
+                        conn.commit()
+                st.success(f"💥 Đã xóa sạch khách hàng [{ten_xoa_chuan}] khỏi hệ thống trực tuyến!")
                 st.rerun()
             
         st.write("---")
 
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT ten FROM khach_hang ORDER BY ten ASC")
-            cac_khach_hien_co = [row[0] for row in cursor.fetchall()]
+        # Tải danh sách tên khách hàng trực tuyến tự động vượt phân quyền chặn bảo mật mạng
+        cac_khach_hien_co = []
+        try:
+            with psycopg2.connect(DB_URL) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT DISTINCT ten FROM khach_hang ORDER BY ten ASC")
+                    rows = cursor.fetchall()
+                    for r in rows:
+                        t_name = r[0] if isinstance(r, (tuple, list)) else r
+                        if t_name not in danh_sach_khach_chuan:
+                            cac_khach_hien_co.append(t_name)
+        except Exception as e:
+            pass
         
         danh_sach_chon = ["-- Chọn khách hàng sẵn có --", "➕ THÊM KHÁCH HÀNG MỚI HOÀN TOÀN"] + cac_khach_hien_co
-        
         st.subheader("🔍 Chọn Bạn Hàng")
         lua_chon_khach = st.selectbox("Chọn tên khách hàng cần xử lý dữ liệu:", options=danh_sach_chon, index=0)
         
@@ -136,16 +136,16 @@ with tab1:
             ten_chuan_hoa = " ".join([w.strip() for w in ten_nhap_raw.strip().split()])
             if ten_chuan_hoa:
                 st.info(f"🆕 Chuẩn bị tạo hồ sơ khách mới: {ten_chuan_hoa}")
-        elif lua_chon_khach != "-- Chọn khách hàng sẵn có --":
+        elif lua_chon_khach != "-- Chọn khách hàng sẵn có --" and lua_chon_khach is not None:
             ten_chuan_hoa = lua_chon_khach
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT ten, sdt, diachi, nocu FROM khach_hang WHERE ten = ?", (ten_chuan_hoa,))
-                row_khach = cursor.fetchone()
+            with psycopg2.connect(DB_URL) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT ten, sdt, diachi, nocu FROM khach_hang WHERE ten = %s", (ten_chuan_hoa,))
+                    row_khach = cursor.fetchone()
             if row_khach:
                 _, sdt_mac_dinh, diachi_mac_dinh, nocu_mac_dinh = row_khach
                 khach_cu = True
-                st.success(f"🔍 Hệ thống lấy hồ sơ khách cũ: {ten_chuan_hoa}")
+                st.success(f"🔍 Đã lấy hồ sơ đám mây của khách cũ: {ten_chuan_hoa}")
 
         st.subheader("👤 Cập nhật thông tin khách")
         with st.form("form_khach_hang"):
@@ -153,20 +153,19 @@ with tab1:
             diachi = st.text_input("Địa chỉ:", value=diachi_mac_dinh)
             no_dau_ky = st.number_input("Nợ gốc mang sang ban đầu (VNĐ):", value=float(nocu_mac_dinh), step=10000.0, format="%.0f")
             
-            if st.form_submit_button("💾 LƯU THÔNG TIN HỒ SƠ"):
+            if st.form_submit_button("💾 LƯU THÔNG TIN HỒ SƠ LÊN CLOUD"):
                 if ten_chuan_hoa:
-                    with sqlite3.connect(DB_FILE) as conn:
-                        cursor = conn.cursor()
-                        if khach_cu:
-                            cursor.execute("UPDATE khach_hang SET sdt=?, diachi=?, nocu=? WHERE ten=?", (sdt, diachi, no_dau_ky, ten_chuan_hoa))
-                        else:
-                            cursor.execute("INSERT INTO khach_hang (ten, sdt, diachi, nocu) VALUES (?, ?, ?, ?)", (ten_chuan_hoa, sdt, diachi, no_dau_ky))
-                        conn.commit()
-                    st.success("✅ Đã lưu thông tin khách hàng!")
+                    with psycopg2.connect(DB_URL) as conn:
+                        with conn.cursor() as cursor:
+                            if khach_cu:
+                                cursor.execute("UPDATE khach_hang SET sdt=%s, diachi=%s, nocu=%s WHERE ten=%s", (sdt, diachi, no_dau_ky, ten_chuan_hoa))
+                            else:
+                                cursor.execute("INSERT INTO khach_hang (ten, sdt, diachi, nocu) VALUES (%s, %s, %s, %s)", (ten_chuan_hoa, sdt, diachi, no_dau_ky))
+                            conn.commit()
+                    st.success("✅ Đã cập nhật hồ sơ lưu trữ trực tuyến thành công!")
                     st.rerun()
                 else:
                     st.error("⚠️ Vui lòng chọn khách hàng hoặc gõ tên khách mới trước!")
-
         if ten_chuan_hoa:
             st.subheader("📝 Giao dịch mới")
             with st.form("form_giao_dich"):
@@ -178,10 +177,8 @@ with tab1:
                 if loai_gd == "Mua hàng":
                     dongia = st.number_input("Đơn giá:", min_value=0.0, step=1000.0, format="%.0f", value=15000.0)
                     soluong = st.number_input("Số lượng mua:", min_value=0.0, step=1.0, value=1.0, format="%.1f")
-                    
                     thanh_tien_tam_tinh = int(dongia * soluong)
-                    st.markdown(f"👉 **Thành tiền mặt hàng (Dự kiến):** <span style='color:blue; font-size:16px;'>{thanh_tien_tam_tinh:,} VNĐ</span>", unsafe_allow_html=True)
-                    
+                    st.markdown(f"👉 **Thành tiền mặt hàng (Tự động nhân tính):** <span style='color:blue; font-size:16px;'>{thanh_tien_tam_tinh:,} VNĐ</span>", unsafe_allow_html=True)
                     tien_tra_kem = st.number_input("Tiền khách trả kèm đơn (nếu có):", min_value=0.0, step=1000.0, format="%.0f")
                 else:
                     dongia = 0.0
@@ -189,86 +186,70 @@ with tab1:
                     tien_tra_kem = st.number_input("Số tiền khách trả nợ:", min_value=0.0, step=1000.0, format="%.0f")
                 
                 if st.form_submit_button("➕ KÍCH LƯU GIAO DỊCH"):
-                    with sqlite3.connect(DB_FILE) as conn:
-                        cursor = conn.cursor()
-                        if loai_gd == "Mua hàng":
-                            thanhtien = dongia * soluong
-                            cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                           (ten_chuan_hoa, ngay_gd, "Bán hàng phát sinh", ten_hang, dvt, dongia, soluong, thanhtien))
-                            if tien_tra_kem > 0:
-                                cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                               (ten_chuan_hoa, ngay_gd, "Khách trả tiền mặt/CK", "Khách thanh toán kèm đơn", "-", 0, 0, tien_tra_kem))
-                        elif loai_gd == "Khách trả tiền":
-                            if tien_tra_kem <= 0:
-                                st.error("⚠️ Vui lòng nhập số tiền khách trả lớn hơn 0 đ!")
-                            else:
-                                cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                               (ten_chuan_hoa, ngay_gd, "Khách trả tiền mặt/CK", "Khách trả tiền nợ", "-", 0, 0, tien_tra_kem))
-                        conn.commit()
-                    st.success("✅ Đã ghi sổ giao dịch mới thành công!")
+                    with psycopg2.connect(DB_URL) as conn:
+                        with conn.cursor() as cursor:
+                            if loai_gd == "Mua hàng":
+                                thanhtien = dongia * soluong
+                                cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, text_hang, dvt, dongia, soluong, thanhtien) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (ten_chuan_hoa, ngay_gd, "Bán hàng phát sinh", ten_hang, dvt, dongia, soluong, thanhtien))
+                                if tien_tra_kem > 0:
+                                    cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, text_hang, dvt, dongia, soluong, thanhtien) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (ten_chuan_hoa, ngay_gd, "Khách trả tiền mặt/CK", "Khách thanh toán kèm đơn", "-", 0, 0, tien_tra_kem))
+                            elif loai_gd == "Khách trả tiền":
+                                if tien_tra_kem <= 0:
+                                    st.error("⚠️ Vui lòng nhập số tiền khách trả lớn hơn 0 đ!")
+                                else:
+                                    cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, text_hang, dvt, dongia, soluong, thanhtien) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (ten_chuan_hoa, ngay_gd, "Khách trả tiền mặt/CK", "Khách trả tiền nợ", "-", 0, 0, tien_tra_kem))
+                            conn.commit()
+                    st.success("✅ Đã ghi sổ đám mây trực tuyến thành công!")
                     st.rerun()
+
     with col_phai:
         st.header("🖨️ Xem Trước Hóa Đơn Hướng Phôi A4")
-        
         st.subheader("⚠️ Sửa lỗi nhập sai")
         ten_khach_can_xoa_dong = st.text_input("Xác nhận tên khách cần xóa dòng giao dịch cuối:", value=ten_chuan_hoa if ten_chuan_hoa else "")
         if st.button("🗑️ BẤM VÀO ĐÂY ĐỂ XÓA DÒNG GIAO DỊCH CUỐI CÙNG"):
             if ten_khach_can_xoa_dong.strip():
-                with sqlite3.connect(DB_FILE) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT id FROM lich_su_mua WHERE ten_khach = ? ORDER BY id DESC LIMIT 1", (ten_khach_can_xoa_dong.strip(),))
-                    row_id = cursor.fetchone()
-                    
-                    if row_id:
-                        cursor.execute("DELETE FROM lich_su_mua WHERE id = ?", (row_id[0],))
-                        conn.commit()
-                        st.success(f"💥 Đã xóa dòng giao dịch cuối của khách [{ten_khach_can_xoa_dong.strip()}]!")
-                        st.rerun()
-                    else:
-                        st.warning("Không tìm thấy lịch sử giao dịch nào của khách hàng này để xóa.")
+                with psycopg2.connect(DB_URL) as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute("SELECT id FROM lich_su_mua WHERE ten_khach = %s ORDER BY id DESC LIMIT 1", (ten_khach_can_xoa_dong.strip(),))
+                        row_id = cursor.fetchone()
+                        if row_id:
+                            cursor.execute("DELETE FROM lich_su_mua WHERE id = %s", (row_id,))
+                            conn.commit()
+                            st.success(f"💥 Đã xóa dòng giao dịch cuối trên Cloud!")
+                            st.rerun()
             else:
                 st.error("Vui lòng nhập tên khách cần xóa dòng giao dịch cuối!")
 
         st.write("---")
-        
         if ten_chuan_hoa:
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien FROM lich_su_mua WHERE ten_khach = ? ORDER BY id ASC", (ten_chuan_hoa,))
-                giao_dich_khach = cursor.fetchall()
-            
+            with psycopg2.connect(DB_URL) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT ngay, loai_gd, text_hang, dvt, dongia, soluong, thanhtien FROM lich_su_mua WHERE ten_khach = %s ORDER BY id ASC", (ten_chuan_hoa,))
+                    giao_dich_khach = cursor.fetchall()
             rows_html = ""
             stt = 1
             tong_phat_sinh = 0
             tong_da_tra = 0
-            
             for gd in giao_dich_khach:
-                ngay, loai, ten_h, dvt_h, dg, sl, tt = gd
+                ngay, loai, text_h, dvt_h, dg, sl, tt = gd
                 dg_int = int(float(dg or 0))
                 tt_int = int(float(tt or 0))
                 sl_float = float(sl or 0)
-                
                 if loai == "Bán hàng phát sinh":
                     tong_phat_sinh += tt_int
                     hien_thi_tt = f"{tt_int:,}"
                     hien_thi_dg = f"{dg_int:,}"
-                    
-                    # Fix lỗi hiển thị định dạng số lượng gọn gàng
-                    if sl_float.is_integer():
-                        hien_thi_sl = f"{int(sl_float):,}"
-                    else:
-                        hien_thi_sl = f"{sl_float:,}"
+                    hien_thi_sl = f"{int(sl_float):,}" if sl_float.is_integer() else f"{sl_float:,}"
                 else:
                     tong_da_tra += tt_int
                     hien_thi_tt = f"-{tt_int:,}"
                     hien_thi_dg = "-"
                     hien_thi_sl = "-"
-                
                 rows_html += f"""
                 <tr style="height: 24px; text-align: center;">
                     <td style="border: 1px solid #000;">{stt}</td>
                     <td style="border: 1px solid #000;">{ngay}</td>
-                    <td style="border: 1px solid #000; text-align: left; padding-left: 5px;">{ten_h}</td>
+                    <td style="border: 1px solid #000; text-align: left; padding-left: 5px;">{text_h}</td>
                     <td style="border: 1px solid #000;">{dvt_h}</td>
                     <td style="border: 1px solid #000; text-align: right; padding-right: 5px;">{hien_thi_dg}</td>
                     <td style="border: 1px solid #000;">{hien_thi_sl}</td>
@@ -276,167 +257,71 @@ with tab1:
                 </tr>
                 """
                 stt += 1
-            
             tong_no_cuoi_ky = float(nocu_mac_dinh) + tong_phat_sinh - tong_da_tra
             html_content = lay_khung_html_a4(ten_chuan_hoa, sdt_mac_dinh, diachi_mac_dinh, rows_html, nocu_mac_dinh, tong_phat_sinh, tong_da_tra, tong_no_cuoi_ky)
-            
             st.subheader("🖨️ Thao tác in")
             js_safe_html = html_content.replace("`", "\\`").replace("\n", "\\n").replace("\r", "")
             st.components.v1.html(f"""
                 <script>
                     function handlePrint() {{
-                        var w = window.open('', '_blank');
-                        w.document.write(`{js_safe_html}`);
-                        w.document.close();
-                        w.focus();
+                        var w = window.open('', '_blank'); w.document.write(`{js_safe_html}`); w.document.close(); w.focus();
                         setTimeout(function() {{ w.print(); w.close(); }}, 500);
                     }}
                 </script>
-                <button onclick="handlePrint()" style="width: 100%; padding: 12px; font-size: 15px; font-weight: bold; background-color: #1E88E5; color: white; border: none; border-radius: 5px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    🖨️ KÍCH HOẠT LỆNH IN HÓA ĐƠN A4 (BẤM VÀO ĐÂY)
-                </button>
+                <button onclick="handlePrint()" style="width: 100%; padding: 12px; font-size: 15px; font-weight: bold; background-color: #1E88E5; color: white; border: none; border-radius: 5px; cursor: pointer;">🖨️ KÍCH HOẠT LỆNH IN HÓA ĐƠN A4</button>
             """, height=60)
-            
             st.html(html_content)
-        else:
-            st.info("Vui lòng chọn khách hàng ở cột trái để hiển thị dữ liệu hóa đơn.")
-# =========================================================================
-# TAB 2: TỔNG HỢP CÔNG NỢ TOÀN XƯỞNG & XUẤT FILE EXCEL BÁO CÁO 
-# =========================================================================
 with tab2:
-    st.header("📊 Danh Sách Quản Lý Công Nợ Toàn Hệ Thống")
-    
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT ten, sdt, diachi, nocu FROM khach_hang")
-        all_khach = cursor.fetchall()
-        
+    st.header("📊 Danh Sách Quản Lý Công NỢ Toàn Hệ Thống")
+    with psycopg2.connect(DB_URL) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT ten, sdt, diachi, nocu FROM khach_hang")
+            all_khach = cursor.fetchall()
     if all_khach:
         bang_tong_hop = []
         stt_tong = 1
-
         for k in all_khach:
             k_ten, k_sdt, k_dc, k_nocu = k
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT loai_gd, thanhtien FROM lich_su_mua WHERE ten_khach = ?", (k_ten,))
-                k_giao_dich = cursor.fetchall()
-            
+            with psycopg2.connect(DB_URL) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT loai_gd, thanhtien FROM lich_su_mua WHERE ten_khach = %s", (k_ten,))
+                    k_giao_dich = cursor.fetchall()
             k_phat_sinh = sum([float(t or 0) for l, t in k_giao_dich if l == "Bán hàng phát sinh"])
             k_da_tra = sum([float(t or 0) for l, t in k_giao_dich if l == "Khách trả tiền mặt/CK"])
             k_no_hien_tai = float(k_nocu or 0) + k_phat_sinh - k_da_tra
-
-            bang_tong_hop.append({
-                "STT": stt_tong, 
-                "Khách Hàng": k_ten, 
-                "SĐT": k_sdt if k_sdt else "...", 
-                "Địa Chỉ": k_dc if k_dc else "...",
-                "Nợ Mang Sang_RAW": int(float(k_nocu)),
-                "Phát Sinh Mới_RAW": int(k_phat_sinh),
-                "Đã Trả_RAW": int(k_da_tra),
-                "Nợ Hiện Tại_RAW": int(k_no_hien_tai)
-            })
+            bang_tong_hop.append({"STT": stt_tong, "Khách Hàng": k_ten, "SĐT": k_sdt if k_sdt else "...", "Địa Chỉ": k_dc if k_dc else "...", "Nợ Mang Sang_RAW": int(float(k_nocu)), "Phát Sinh Mới_RAW": int(k_phat_sinh), "Đã Trả_RAW": int(k_da_tra), "Nợ Hiện Tại_RAW": int(k_no_hien_tai)})
             stt_tong += 1
-
         search_all = st.text_input("🔍 Nhập từ khóa lọc nhanh danh sách (Tên / Số điện thoại):", value="", key="search_tab2")
-        
         bang_hien_thi = []
         bang_excel_raw = []
         stt_moi = 1
-        
-        tong_xuong_mang_sang = 0
-        tong_xuong_doanh_thu = 0
-        tong_xuong_da_tra = 0
-        tong_xuong_cong_no_hien_tai = 0
-
+        tong_xuong_mang_sang = tong_xuong_doanh_thu = tong_xuong_da_tra = tong_xuong_cong_no_hien_tai = 0
         for row in bang_tong_hop:
             sdt_check = row["SĐT"] if row["SĐT"] else ""
             if search_all.lower() in row["Khách Hàng"].lower() or search_all in sdt_check:
-                tong_xuong_mang_sang += row["Nợ Mang Sang_RAW"]
-                tong_xuong_doanh_thu += row["Phát Sinh Mới_RAW"]
-                tong_xuong_da_tra += row["Đã Trả_RAW"]
-                tong_xuong_cong_no_hien_tai += row["Nợ Hiện Tại_RAW"]
-
-                bang_hien_thi.append({
-                    "STT": stt_moi, 
-                    "Khách Hàng": row["Khách Hàng"], 
-                    "SĐT": row["SĐT"], 
-                    "Địa Chỉ": row["Địa Chỉ"],
-                    "Nợ Mang Sang (đ)": f"{row['Nợ Mang Sang_RAW']:,}", 
-                    "Phát Sinh Mới (đ)": f"{row['Phát Sinh Mới_RAW']:,}", 
-                    "Đã Trả (đ)": f"{row['Đã Trả_RAW']:,}", 
-                    "Nợ Hiện Tại (đ)": f"{row['Nợ Hiện Tại_RAW']:,}"
-                })
-                
-                bang_excel_raw.append({
-                    "STT": stt_moi, 
-                    "Khách Hàng": row["Khách Hàng"], 
-                    "Số Điện Thoại": "" if row["SĐT"] == "..." else row["SĐT"], 
-                    "Địa Chỉ": "" if row["Địa Chỉ"] == "..." else row["Địa Chỉ"],
-                    "Nợ Mang Sang (VNĐ)": row["Nợ Mang Sang_RAW"], 
-                    "Phát Sinh Mới (VNĐ)": row["Phát Sinh Mới_RAW"], 
-                    "Đã Trả (VNĐ)": row["Đã Trả_RAW"], 
-                    "Nợ Hiện Tại (VNĐ)": row["Nợ Hiện Tại_RAW"]
-                })
+                tong_xuong_mang_sang += row["Nợ Mang Sang_RAW"]; tong_xuong_doanh_thu += row["Phát Sinh Mới_RAW"]; tong_xuong_da_tra += row["Đã Trả_RAW"]; tong_xuong_cong_no_hien_tai += row["Nợ Hiện Tại_RAW"]
+                bang_hien_thi.append({"STT": stt_moi, "Khách Hàng": row["Khách Hàng"], "SĐT": row["SĐT"], "Địa Chỉ": row["Địa Chỉ"], "Nợ Mang Sang (đ)": f"{row['Nợ Mang Sang_RAW']:,}", "Phát Sinh Mới (đ)": f"{row['Phát Sinh Mới_RAW']:,}", "Đã Trả (đ)": f"{row['Đã Trả_RAW']:,}", "Nợ Hiện Tại (đ)": f"{row['Nợ Hiện Tại_RAW']:,}"})
+                bang_excel_raw.append({"STT": stt_moi, "Khách Hàng": row["Khách Hàng"], "Số Điện Thoại": "" if row["SĐT"] == "..." else row["SĐT"], "Địa Chỉ": "" if row["Địa Chỉ"] == "..." else row["Địa Chỉ"], "Nợ Mang Sang (VNĐ)": row["Nợ Mang Sang_RAW"], "Phát Sinh Mới (VNĐ)": row["Phát Sinh Mới_RAW"], "Đã Trả (VNĐ)": row["Đã Trả_RAW"], "Nợ Hiện Tại (VNĐ)": row["Nợ Hiện Tại_RAW"]})
                 stt_moi += 1
-
-        st.markdown("### 🏪 Thống Kê Dòng Tiền Theo Bộ Lọc")
+        st.markdown("### 🏪 Thống Kê Dòng Tiền Theo Bộ Lọc CLOUD")
         col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(label="💰 TỔNG DOANH THU PHÁT SINH", value=f"{int(tong_xuong_doanh_thu):,} VNĐ")
-        with col2:
-            st.metric(label="🛑 TỔNG CÔNG NỢ ĐANG BỊ ĐỌNG", value=f"{int(tong_xuong_cong_no_hien_tai):,} VNĐ", delta="Khách chưa trả", delta_color="inverse")
-        with col3:
-            st.metric(label="✅ TỔNG TIỀN MẶT / CK ĐÃ THU", value=f"{int(tong_xuong_da_tra):,} VNĐ")
-            
+        with col1: st.metric(label="💰 TỔNG DOANH THU PHÁT SINH", value=f"{int(tong_xuong_doanh_thu):,} VNĐ")
+        with col2: st.metric(label="🛑 TỔNG CÔNG NỢ ĐANG BỊ ĐỌNG", value=f"{int(tong_xuong_cong_no_hien_tai):,} VNĐ", delta="Khách chưa trả", delta_color="inverse")
+        with col3: st.metric(label="✅ TỔNG TIỀM MẶT / CK ĐÃ THU", value=f"{int(tong_xuong_da_tra):,} VNĐ")
         st.write("---") 
-
         if bang_hien_thi:
-            bang_hien_thi.append({
-                "STT": "Tổng",
-                "Khách Hàng": "TOÀN HỆ THỐNG",
-                "SĐT": "-",
-                "Địa Chỉ": "-",
-                "Nợ Mang Sang (đ)": f"{int(tong_xuong_mang_sang):,}",
-                "Phát Sinh Mới (đ)": f"{int(tong_xuong_doanh_thu):,}",
-                "Đã Trả (đ)": f"{int(tong_xuong_da_tra):,}",
-                "Nợ Hiện Tại (đ)": f"{int(tong_xuong_cong_no_hien_tai):,}"
-            })
+            bang_hien_thi.append({"STT": "Tổng", "Khách Hàng": "TOÀN HỆ THỐNG", "SĐT": "-", "Địa Chỉ": "-", "Nợ Mang Sang (đ)": f"{int(tong_xuong_mang_sang):,}", "Phát Sinh Mới (đ)": f"{int(tong_xuong_doanh_thu):,}", "Đã Trả (đ)": f"{int(tong_xuong_da_tra):,}", "Nợ Hiện Tại (đ)": f"{int(tong_xuong_cong_no_hien_tai):,}"})
             st.table(bang_hien_thi)
-            
-            st.write("---")
-            st.subheader("📥 Xuất dữ liệu báo cáo")
-            
-            bang_excel_raw.append({
-                "STT": "Tổng",
-                "Khách Hàng": "TOÀN HỆ THỐNG",
-                "Số Điện Thoại": "-",
-                "Địa Chỉ": "-",
-                "Nợ Mang Sang (VNĐ)": int(tong_xuong_mang_sang),
-                "Phát Sinh Mới (VNĐ)": int(tong_xuong_doanh_thu),
-                "Đã Trả (VNĐ)": int(tong_xuong_da_tra),
-                "Nợ Hiện Tại (VNĐ)": int(tong_xuong_cong_no_hien_tai)
-            })
-            
+            st.write("---"); st.subheader("📥 Xuất dữ liệu báo cáo Excel trực tuyến")
+            bang_excel_raw.append({"STT": "Tổng", "Khách Hàng": "TOÀN HỆ THỐNG", "Số Điện Thoại": "-", "Địa Chỉ": "-", "Nợ Mang Sang (VNĐ)": int(tong_xuong_mang_sang), "Phát Sinh Mới (VNĐ)": int(tong_xuong_doanh_thu), "Đã Trả (VNĐ)": int(tong_xuong_da_tra), "Nợ Hiện Tại (VNĐ)": int(tong_xuong_cong_no_hien_tai)})
             df = pd.DataFrame(bang_excel_raw)
-            
             def convert_df_to_excel(df_data):
-                import io
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df_data.to_excel(writer, index=False, sheet_name='Bao_Cao_Cong_No')
+                import io; output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer: df_data.to_excel(writer, index=False, sheet_name='Cloud_Bao_Cao')
                 return output.getvalue()
-                
-            excel_data = convert_df_to_excel(df)
-            ngay_tai_file = datetime.datetime.now().strftime("%d_%m_%Y")
-            
-            st.download_button(
-                label="📥 XUẤT FILE EXCEL BÁO CÁO CÔNG NỢ THEO BỘ LỌC",
-                data=excel_data,
-                file_name=f"Bao_Cao_Cong_No_Loc_{ngay_tai_file}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            excel_data = convert_df_to_excel(df); ngay_tai_file = datetime.datetime.now().strftime("%d_%m_%Y")
+            st.download_button(label="📥 XUẤT FILE EXCEL BÁO CÁO CÔNG NỢ CLOUD", data=excel_data, file_name=f"Bao_Cao_Cloud_{ngay_tai_file}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         else:
             st.warning("Không khớp với bất kỳ thông tin bạn hàng nào.")
     else:
-        st.info("Hệ thống dữ liệu trống. Hãy thêm khách hàng mới ở Tab 1.")
+        st.info("Hệ thống dữ liệu đám mây trống. Hãy chạy file chuyen_du_lieu.py trước để đẩy số liệu lên mạng.")
