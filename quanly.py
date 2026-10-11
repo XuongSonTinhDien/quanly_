@@ -1,10 +1,17 @@
 import os
-import sqlite3
 import datetime
 import streamlit as st
 import pandas as pd
 import json
 import io
+
+# --- ĐOẠN CODE KẾT NỐI SUPABASE (ĐÃ ĐỒNG BỘ ĐÁM MAÂY) ---
+from supabase import create_client
+# Địa chỉ chính xác chứa Project ID của bạn
+SUPABASE_URL = "https://hyatrmkculrugytuvzeg.supabase.co"
+SUPABASE_KEY = "sb_publishable_R_3hs5irSHRvse_CdrtyQQ_STr4gAgg"
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 # Cấu hình giao diện Streamlit rộng rãi toàn màn hình
 st.set_page_config(page_title="Hệ Thống Quản Lý Sơn Tĩnh Điện", layout="wide")
@@ -12,7 +19,6 @@ st.set_page_config(page_title="Hệ Thống Quản Lý Sơn Tĩnh Điện", layo
 # =============================================================
 # 1. CẤU HÌNH HỆ THỐNG & THÔNG TIN CƠ SỞ
 # =============================================================
-DB_FILE = "dulieu_son_tinh_dien.db"
 TEN_CO_SO = "XƯỞNG SƠN TĨNH ĐIỆN HƯỞNG THỦY"
 SDT_CHU_XUONG = "0979.141.588...0354.179.792"
 DIA_CHI_XUONG = "Tân Lập Hợp Lý Phú Thọ"
@@ -32,7 +38,6 @@ def chuyen_doi_so_an_toan(gia_tri):
         return int(float(gia_tri))
     except (ValueError, TypeError):
         return 0
-
 def lay_khung_html_a4(ten_chuan_hoa, sdt, diachi, rows_html, no_dau_ky, tong_phat_sinh, tong_da_tra, tong_no_cuoi_ky):
     ngay_lap_he_thong = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     
@@ -97,16 +102,9 @@ def lay_khung_html_a4(ten_chuan_hoa, sdt, diachi, rows_html, no_dau_ky, tong_pha
         </div>
     </div>
     """
-# Khởi tạo CSDL ban đầu
-with sqlite3.connect(DB_FILE) as conn:
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS khach_hang (ten TEXT PRIMARY KEY, sdt TEXT, diachi TEXT, nocu REAL DEFAULT 0)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS lich_su_mua (id INTEGER PRIMARY KEY AUTOINCREMENT, ten_khach TEXT, ngay TEXT, loai_gd TEXT, ten_hang TEXT, dvt TEXT, dongia REAL DEFAULT 0, soluong REAL DEFAULT 0, thanhtien REAL DEFAULT 0)")
-    conn.commit()
 
 st.title("🏭 HỆ THỐNG QUẢN LÝ BẠN HÀNG & CÔNG NỢ SƠN TĨNH ĐIỆN")
 tab1, tab2 = st.tabs(["👤 CHI TIẾT KHÁCH HÀNG & IN ẤN", "📊 TỔNG HỢP CÔNG NỢ TOÀN XƯỞNG"])
-
 # =============================================================
 # TAB 1: CHI TIẾT KHÁCH HÀNG & IN ẤN
 # =============================================================
@@ -127,20 +125,17 @@ with tab1:
                 st.error("Bạn phải tích chọn ô xác nhận phía trên trước khi thực hiện xóa!")
             else:
                 ten_xoa_chuan = " ".join(ten_xoa_tuy_chon.strip().split())
-                with sqlite3.connect(DB_FILE) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM khach_hang WHERE ten = ?", (ten_xoa_chuan,))
-                    cursor.execute("DELETE FROM lich_su_mua WHERE ten_khach = ?", (ten_xoa_chuan,))
-                    conn.commit()
-                st.success(f"💥 Đã xóa sạch khách hàng [{ten_xoa_chuan}] khỏi hệ thống!")
+                # Thao tác xóa trực tiếp trên đám mây Supabase
+                supabase.table("khach_hang").delete().eq("ten", ten_xoa_chuan).execute()
+                supabase.table("lich_su_mua").delete().eq("ten_khach", ten_xoa_chuan).execute()
+                st.success(f"💥 Đã xóa sạch khách hàng [{ten_xoa_chuan}] khỏi hệ thống đám mây!")
                 st.rerun()
             
         st.write("---")
 
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT ten FROM khach_hang ORDER BY ten ASC")
-            cac_khach_hien_co = [row[0] for row in cursor.fetchall()]
+        # Đọc trực tiếp danh sách tên khách từ đám mây để nạp vào Selectbox chọn lựa
+        response_khach = supabase.table("khach_hang").select("ten").order("ten", desc=False).execute()
+        cac_khach_hien_co = [row["ten"] for row in response_khach.data]
         
         danh_sach_chon = ["-- Chọn khách hàng sẵn có --", "➕ THÊM KHÁCH HÀNG MỚI HOÀN TOÀN"] + cac_khach_hien_co
         
@@ -154,14 +149,16 @@ with tab1:
         if lua_chon_khach != "-- Chọn khách hàng sẵn có --" and lua_chon_khach != "➕ THÊM KHÁCH HÀNG MỚI HOÀN TOÀN":
             ten_chuan_hoa = lua_chon_khach
             khach_cu = True
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT sdt, diachi, nocu FROM khach_hang WHERE ten = ?", (ten_chuan_hoa,))
-                row_khach = cursor.fetchone()
-            if row_khach:
-                sdt_mac_dinh, diachi_mac_dinh, nocu_mac_dinh = row_khach
-                st.success(f"🔍 Hệ thống lấy hồ sơ khách cũ: {ten_chuan_hoa}")
-
+            
+            # Lấy thông tin chi tiết hồ sơ từ bảng khach_hang đám mây
+            response_profile = supabase.table("khach_hang").select("sdt, diachi, nocu").eq("ten", ten_chuan_hoa).execute()
+            if response_profile.data:
+                row_khach = response_profile.data[0]
+                sdt_mac_dinh = row_khach.get("sdt", "")
+                diachi_mac_dinh = row_khach.get("diachi", "")
+                nocu_mac_dinh = row_khach.get("nocu", 0.0)
+                st.success(f"🔍 Hệ thống lấy hồ sơ khách cũ từ đám mây: {ten_chuan_hoa}")
+                ######################## Đoạn 4 ###############################################
         st.subheader("👤 Cập nhật thông tin khách")
         with st.form("form_khach_hang"):
             if lua_chon_khach == "➕ THÊM KHÁCH HÀNG MỚI HOÀN TOÀN":
@@ -171,32 +168,28 @@ with tab1:
 
             sdt = st.text_input("Số Điện Thoại:", value=sdt_mac_dinh)
             diachi = st.text_input("Địa chỉ:", value=diachi_mac_dinh)
-            
-            # Khóa không cho sửa nợ đầu kỳ nếu chọn hồ sơ khách cũ để bảo vệ dữ liệu
             no_dau_ky = st.number_input("Nợ gốc mang sang ban đầu (VNĐ):", value=float(nocu_mac_dinh), step=10000.0, format="%.0f", disabled=khach_cu)
             
             if st.form_submit_button("💾 LƯU THÔNG TIN HỒ SƠ"):
                 if ten_khach_form and ten_khach_form != "-- Chọn khách hàng sẵn có --":
                     ten_chuan_hoa_form = " ".join([w.strip() for w in ten_khach_form.strip().split()])
                     
-                    with sqlite3.connect(DB_FILE) as conn:
-                        cursor = conn.cursor()
-                        if khach_cu:
-                            cursor.execute("UPDATE khach_hang SET sdt=?, diachi=? WHERE ten=?", (sdt, diachi, ten_chuan_hoa_form))
+                    if khach_cu:
+                        supabase.table("khach_hang").update({"sdt": sdt, "diachi": diachi}).eq("ten", ten_chuan_hoa_form).execute()
+                    else:
+                        check_trung = supabase.table("khach_hang").select("ten").eq("ten", ten_chuan_hoa_form).execute()
+                        if check_trung.data:
+                            st.error("⚠️ Tên khách hàng này đã tồn tại trên hệ thống đám mây!")
+                            ten_chuan_hoa_form = ""
                         else:
-                            cursor.execute("SELECT ten FROM khach_hang WHERE ten=?", (ten_chuan_hoa_form,))
-                            if cursor.fetchone():
-                                st.error("⚠️ Tên khách hàng này đã tồn tại trên hệ thống!")
-                                ten_chuan_hoa_form = ""
-                            else:
-                                cursor.execute("INSERT INTO khach_hang (ten, sdt, diachi, nocu) VALUES (?, ?, ?, ?)", (ten_chuan_hoa_form, sdt, diachi, no_dau_ky))
-                        conn.commit()
+                            supabase.table("khach_hang").insert({"ten": ten_chuan_hoa_form, "sdt": sdt, "diachi": diachi, "nocu": no_dau_ky}).execute()
+                    
                     if ten_chuan_hoa_form:
-                        st.success("✅ Đã lưu thông tin khách hàng!")
+                        st.success("✅ Đã lưu thông tin khách hàng lên Đám mây!")
                         st.rerun()
                 else:
                     st.error("⚠️ Vui lòng chọn khách hàng hoặc gõ tên khách mới trước!")
-        # Phần ghi nhận giao dịch mới
+
         if ten_chuan_hoa:
             st.subheader("📝 Giao dịch mới")
             loai_gd = st.radio("Loại giao dịch:", ["Mua hàng", "Khách trả tiền"], horizontal=True, key="loai_gd_radio")
@@ -205,9 +198,9 @@ with tab1:
                 ngay_gd = st.date_input("Ngày thực hiện:", datetime.date.today()).strftime("%d/%m/%Y")
                 
                 if loai_gd == "Mua hàng":
-                    ten_hang = st.selectbox("Tên hàng / Nội dung công việc:", ["Trắng", "Đen", "Đen Trắng", "Xám đá", "Đen sần", "Đồng sần", "Ghi xanh"])
+                    ten_hang = st.text_input("Tên hàng / Nội dung công việc:", value="trắng")
                     dvt = st.selectbox("Đơn vị tính (ĐVT):", ["kg", "mét", "cái", "Bộ", "lượt"])
-                    dongia = st.selectbox("Đơn giá:", [8000.0, 11000.0, 12000.0, 14000.0, 15000.0])
+                    dongia = st.selectbox("Đơn giá:", [40000.0, 45000.0, 50000.0, 60000.0, 70000.0, 8000.0, 10000.0, 11000.0, 12000.0, 14000.0, 15000.0])
                     soluong = st.number_input("Số lượng mua:", min_value=0.0, step=1.0, value=1.0, format="%.1f")
                     thanh_tien_tam_tinh = int(dongia * soluong)
                     st.markdown(f"👉 **Thành tiền mặt hàng (Dự kiến):** <span style='color:blue; font-size:16px;'>{thanh_tien_tam_tinh:,} VNĐ</span>", unsafe_allow_html=True)
@@ -220,30 +213,36 @@ with tab1:
                     tien_tra_kem = st.number_input("Số tiền khách trả nợ:", min_value=0.0, step=1000.0, format="%.0f")
                 
                 if st.form_submit_button("➕ KÍCH LƯU GIAO DỊCH"):
-                    hop_le = True  # Đặt biến kiểm soát tiến trình để chặn lỗi lưu trôi lệnh
+                    hop_le = True
                     
-                    with sqlite3.connect(DB_FILE) as conn:
-                        cursor = conn.cursor()
-                        if loai_gd == "Mua hàng":
-                            thanhtien = dongia * soluong
-                            cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                           (ten_chuan_hoa, ngay_gd, "Bán hàng phát sinh", ten_hang, dvt, dongia, soluong, thanhtien))
-                            if tien_tra_kem > 0:
-                                cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                               (ten_chuan_hoa, ngay_gd, "Khách trả tiền mặt/CK", "Khách thanh toán kèm đơn", "-", 0, 0, tien_tra_kem))
-                        elif loai_gd == "Khách trả tiền":
-                            if tien_tra_kem <= 0:
-                                st.error("⚠️ Vui lòng nhập số tiền khách trả lớn hơn 0 đ!")
-                                hop_le = False
-                            else:
-                                cursor.execute("INSERT INTO lich_su_mua (ten_khach, ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                               (ten_chuan_hoa, ngay_gd, "Khách trả tiền mặt/CK", "Khách trả tiền nợ", "-", 0, 0, tien_tra_kem))
+                    if loai_gd == "Mua hàng":
+                        thanhtien = dongia * soluong
+                        # ĐÃ SỬA: Đổi tên cột thành text_hang để khớp với Supabase
+                        supabase.table("lich_su_mua").insert({
+                            "ten_khach": ten_chuan_hoa, "ngay": ngay_gd, "loai_gd": "Bán hàng phát sinh", 
+                            "text_hang": ten_hang, "dvt": dvt, "dongia": dongia, "soluong": soluong, "thanhtien": thanhtien
+                        }).execute()
                         
-                        if hop_le:
-                            conn.commit()
-                            st.success("✅ Đã ghi sổ giao dịch mới thành công!")
-                            st.rerun()
+                        if tien_tra_kem > 0:
+                            supabase.table("lich_su_mua").insert({
+                                "ten_khach": ten_chuan_hoa, "ngay": ngay_gd, "loai_gd": "Khách trả tiền mặt/CK", 
+                                "text_hang": "Khách thanh toán kèm đơn", "dvt": "-", "dongia": 0, "soluong": 0, "thanhtien": tien_tra_kem
+                            }).execute()
+                    elif loai_gd == "Khách trả tiền":
+                        if tien_tra_kem <= 0:
+                            st.error("⚠️ Vui lòng nhập số tiền khách trả lớn hơn 0 đ!")
+                            hop_le = False
+                        else:
+                            supabase.table("lich_su_mua").insert({
+                                "ten_khach": ten_chuan_hoa, "ngay": ngay_gd, "loai_gd": "Khách trả tiền mặt/CK", 
+                                "text_hang": "Khách trả tiền nợ", "dvt": "-", "dongia": 0, "soluong": 0, "thanhtien": tien_tra_kem
+                            }).execute()
+                    
+                    if hop_le:
+                        st.success("✅ Đã ghi sổ giao dịch mới lên đám mây!")
+                        st.rerun()
 
+                        ############################## Đoan 5 ########################3
     with col_phai:
         st.header("🖨️ Xem Trước Hóa Đơn Hướng Phôi A4")
         
@@ -257,25 +256,22 @@ with tab1:
             elif not xac_nhan_xoa_dong:
                 st.error("Vui lòng tích chọn ô đồng ý xóa phía trên!")
             else:
-                with sqlite3.connect(DB_FILE) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT id FROM lich_su_mua WHERE ten_khach = ? ORDER BY id DESC LIMIT 1", (ten_khach_can_xoa_dong.strip(),))
-                    row_id = cursor.fetchone()
-                    
-                    if row_id:
-                        cursor.execute("DELETE FROM lich_su_mua WHERE id = ?", (row_id[0],))
-                        conn.commit()
-                        st.success(f"💥 Đã xóa dòng giao dịch cuối của khách [{ten_khach_can_xoa_dong.strip()}]!")
-                        st.rerun()
-                    else:
-                        st.warning("Không tìm thấy lịch sử giao dịch nào của khách hàng này để xóa.")
+                target_khach = ten_khach_can_xoa_dong.strip()
+                res_last = supabase.table("lich_su_mua").select("id").eq("ten_khach", target_khach).order("id", desc=True).limit(1).execute()
+                
+                if res_last.data:
+                    last_id = res_last.data[0]["id"]
+                    supabase.table("lich_su_mua").delete().eq("id", last_id).execute()
+                    st.success(f"💥 Đã xóa dòng giao dịch cuối trên đám mây của khách [{target_khach}]!")
+                    st.rerun()
+                else:
+                    st.warning("Không tìm thấy lịch sử giao dịch nào của khách hàng này để xóa.")
 
         st.write("---")
         if ten_chuan_hoa:
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT ngay, loai_gd, ten_hang, dvt, dongia, soluong, thanhtien FROM lich_su_mua WHERE ten_khach = ? ORDER BY id ASC", (ten_chuan_hoa,))
-                giao_dich_khach = cursor.fetchall()
+            # ĐÃ SỬA: Thay ten_hang bằng text_hang trong câu lệnh select dữ liệu
+            res_history = supabase.table("lich_su_mua").select("ngay, loai_gd, text_hang, dvt, dongia, soluong, thanhtien").eq("ten_khach", ten_chuan_hoa).order("id", desc=False).execute()
+            giao_dich_khach = res_history.data
             
             rows_html = ""
             stt = 1
@@ -283,7 +279,15 @@ with tab1:
             tong_da_tra = 0
             
             for gd in giao_dich_khach:
-                ngay, loai, ten_h, dvt_h, dg, sl, tt = gd
+                ngay = gd.get("ngay", "")
+                loai = gd.get("loai_gd", "")
+                # ĐÃ SỬA: Lấy đúng từ khóa text_hang
+                ten_h = gd.get("text_hang", "")
+                dvt_h = gd.get("dvt", "")
+                dg = gd.get("dongia", 0.0)
+                sl = gd.get("soluong", 0.0)
+                tt = gd.get("thanhtien", 0.0)
+                
                 dg_int = chuyen_doi_so_an_toan(dg)
                 tt_int = chuyen_doi_so_an_toan(tt)
                 sl_float = float(sl or 0)
@@ -315,12 +319,11 @@ with tab1:
                 </tr>
                 """
                 stt += 1
-            
+
             tong_no_cuoi_ky = float(nocu_mac_dinh or 0) + tong_phat_sinh - tong_da_tra
             html_content = lay_khung_html_a4(ten_chuan_hoa, sdt_mac_dinh, diachi_mac_dinh, rows_html, nocu_mac_dinh, tong_phat_sinh, tong_da_tra, tong_no_cuoi_ky)
             
             st.subheader("🖨️ Thao tác in")
-            # Bảo mật an toàn: Sử dụng json.dumps chống vỡ cấu trúc chuỗi JS khi gặp ký tự ngoặc đơn/kép
             js_safe_html = json.dumps(html_content)
             st.components.v1.html(f"""
                 <script>
@@ -341,33 +344,39 @@ with tab1:
             st.html(html_content)
         else:
             st.info("Vui lòng chọn khách hàng ở cột trái để hiển thị dữ liệu hóa đơn.")
-# =========================================================================
+
+# ================================= Đoạn 6 ========================================
 # TAB 2: TỔNG HỢP CÔNG NỢ TOÀN XƯỞNG & XUẤT FILE EXCEL BÁO CÁO 
 # =========================================================================
 with tab2:
     st.header("📊 Danh Sách Quản Lý Công NỢ Toàn Hệ Thống")
     
-    # TỐI ƯU HIỆU NĂNG: Gộp truy vấn SQL qua hàm GROUP BY, tăng tốc độ phần cứng lên gấp 100 lần
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT ten, sdt, diachi, nocu FROM khach_hang")
-        all_khach = cursor.fetchall()
+    # Đọc toàn bộ danh sách khách hàng và lịch sử giao dịch từ đám mây về xử lý
+    res_all_khach = supabase.table("khach_hang").select("ten, sdt, diachi, nocu").execute()
+    all_khach = res_all_khach.data
         
-        cursor.execute("""
-            SELECT ten_khach, 
-                   SUM(CASE WHEN loai_gd = 'Bán hàng phát sinh' THEN thanhtien ELSE 0 END) as phat_sinh,
-                   SUM(CASE WHEN loai_gd = 'Khách trả tiền mặt/CK' THEN thanhtien ELSE 0 END) as da_tra
-            FROM lich_su_mua 
-            GROUP BY ten_khach
-        """)
-        dict_giao_dich = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
+    res_all_gd = supabase.table("lich_su_mua").select("ten_khach, loai_gd, thanhtien").execute()
+    all_gd = res_all_gd.data
+    
+    # Gộp dữ liệu công nợ bằng thư viện Pandas thay thế cho cú pháp SQLite cũ
+    dict_giao_dich = {}
+    if all_gd:
+        df_gd = pd.DataFrame(all_gd)
+        df_gd['phat_sinh'] = df_gd.apply(lambda r: r['thanhtien'] if r['loai_gd'] == 'Bán hàng phát sinh' else 0, axis=1)
+        df_gd['da_tra'] = df_gd.apply(lambda r: r['thanhtien'] if r['loai_gd'] == 'Khách trả tiền mặt/CK' else 0, axis=1)
+        df_grouped = df_gd.groupby('ten_khach').agg({'phat_sinh': 'sum', 'da_tra': 'sum'}).reset_index()
+        dict_giao_dich = {row['ten_khach']: (row['phat_sinh'], row['da_tra']) for _, row in df_grouped.iterrows()}
         
     if all_khach:
         bang_tong_hop = []
         stt_tong = 1
-
+        
         for k in all_khach:
-            k_ten, k_sdt, k_dc, k_nocu = k
+            k_ten = k.get("ten", "")
+            k_sdt = k.get("sdt", "")
+            k_dc = k.get("diachi", "")
+            k_nocu = k.get("nocu", 0.0)
+            
             k_phat_sinh, k_da_tra = dict_giao_dich.get(k_ten, (0.0, 0.0))
             k_no_hien_tai = float(k_nocu or 0) + k_phat_sinh - k_da_tra
 
@@ -434,7 +443,7 @@ with tab2:
         with col3:
             st.metric(label="✅ TỔNG TIỀN MẶT / CK ĐÃ THU", value=f"{int(tong_xuong_da_tra):,} VNĐ")
             
-        st.write("---") 
+        st.write("---")
 
         if bang_hien_thi:
             bang_hien_thi.append({
@@ -448,7 +457,6 @@ with tab2:
                 "Nợ Hiện Tại (đ)": int(tong_xuong_cong_no_hien_tai)
             })
             
-            # GIẢI PHÁP GIAO DIỆN: Đổi sang st.dataframe để có thanh cuộn và tự động ngăn cách hàng nghìn
             df_view = pd.DataFrame(bang_hien_thi)
             st.dataframe(
                 df_view, 
