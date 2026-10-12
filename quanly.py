@@ -349,7 +349,7 @@ with tab1:
 # TAB 2: TỔNG HỢP CÔNG NỢ TOÀN XƯỞNG & XUẤT FILE EXCEL BÁO CÁO 
 # =========================================================================
 with tab2:
-    st.header("📊 Danh Sách Quản Lý Công NỢ Toàn Hệ Thống")
+    st.header("📊 Danh Sách Quản Lý Công NỢ Khách Hàng")
     
     # Đọc toàn bộ danh sách khách hàng và lịch sử giao dịch từ đám mây về xử lý
     res_all_khach = supabase.table("khach_hang").select("ten, sdt, diachi, nocu").execute()
