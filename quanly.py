@@ -15,6 +15,29 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Cấu hình giao diện Streamlit rộng rãi toàn màn hình
 st.set_page_config(page_title="Hệ Thống Quản Lý Sơn Tĩnh Điện", layout="wide")
+# =========================================================================
+# 🔐 ĐOẠN CODE PHÂN QUYỀN ĐĂNG NHẬP (CHÈN VÀO TỪ DÒNG 19)
+# =========================================================================
+st.sidebar.header("🔐 ĐĂNG NHẬP HỆ THỐNG")
+mat_khau = st.sidebar.text_input("Nhập mật khẩu truy cập:", type="password")
+
+# Cài đặt mật khẩu tùy ý bạn (Có thể sửa lại chữ trong ngoặc kép theo ý bạn)
+MAT_KHAU_ADMIN = "Huong1985@"   # Toàn quyền (Có nút Xóa)
+MAT_KHAU_THO   = "123456"   # Chỉ được xem và nhập liệu (Ẩn nút Xóa)
+
+# Biến kiểm soát quyền hạn trên toàn bộ ứng dụng
+quyen_admin = False
+
+if mat_khau == MAT_KHAU_ADMIN:
+    st.sidebar.success("🟢 Quyền hạn: CHỦ XƯỞNG")
+    quyen_admin = True  # Cho phép hiển thị các nút xóa
+elif mat_khau == MAT_KHAU_THO:
+    st.sidebar.success("🔵 Quyền hạn: THỢ/NHÂN VIÊN")
+    quyen_admin = False # Sẽ ẩn các nút xóa đi
+else:
+    st.warning("⚠️ Vui lòng nhập đúng mật khẩu ở thanh bên trái để sử dụng hệ thống.")
+    st.stop() # Dừng toàn bộ code phía dưới lại, không cho xem dữ liệu khi chưa nhập mật khẩu
+# =========================================================================
 
 # =============================================================
 # 1. CẤU HÌNH HỆ THỐNG & THÔNG TIN CƠ SỞ
@@ -114,22 +137,24 @@ with tab1:
     with col_trai:
         st.header("🛠️ Thống Kê & Nhập Liệu")
         
-        st.subheader("🚨 Quản trị hệ thống")
-        ten_xoa_tuy_chon = st.text_input("Nhập CHÍNH XÁC tên khách muốn xóa bỏ hoàn toàn:", key="xoa_khach_doc_lap")
-        xac_nhan_xoa = st.checkbox("⚠️ Tôi chắc chắn muốn xóa toàn bộ lịch sử và công nợ của khách hàng này.", key="chk_xac_nhan")
-        
-        if st.button("🗑️ BẤM VÀO ĐỂ XÓA SẠCH KHÁCH HÀNG NÀY"):
-            if not ten_xoa_tuy_chon.strip():
-                st.warning("Vui lòng gõ tên khách hàng vào ô trên trước khi bấm xóa!")
-            elif not xac_nhan_xoa:
-                st.error("Bạn phải tích chọn ô xác nhận phía trên trước khi thực hiện xóa!")
-            else:
-                ten_xoa_chuan = " ".join(ten_xoa_tuy_chon.strip().split())
-                # Thao tác xóa trực tiếp trên đám mây Supabase
-                supabase.table("khach_hang").delete().eq("ten", ten_xoa_chuan).execute()
-                supabase.table("lich_su_mua").delete().eq("ten_khach", ten_xoa_chuan).execute()
-                st.success(f"💥 Đã xóa sạch khách hàng [{ten_xoa_chuan}] khỏi hệ thống đám mây!")
-                st.rerun()
+         # Chèn lệnh kiểm tra mật khẩu chủ xưởng ở đây
+        if quyen_admin:
+            st.subheader("🚨 Quản trị hệ thống")
+            ten_xoa_tuy_chon = st.text_input("Nhập CHÍNH XÁC tên khách muốn xóa bỏ hoàn toàn:", key="xoa_khach_doc_lap")
+            xac_nhan_xoa = st.checkbox("⚠️ Tôi chắc chắn muốn xóa toàn bộ lịch sử và công nợ của khách hàng này.", key="chk_xac_nhan")
+            
+            if st.button("🗑️ BẤM VÀO ĐỂ XÓA SẠCH KHÁCH HÀNG NÀY"):
+                if not ten_xoa_tuy_chon.strip():
+                    st.warning("Vui lòng gõ tên khách hàng vào ô trên trước khi bấm xóa!")
+                elif not xac_nhan_xoa:
+                    st.error("Bạn phải tích chọn ô xác nhận phía trên trước khi thực hiện xóa!")
+                else:
+                    ten_xoa_chuan = " ".join(ten_xoa_tuy_chon.strip().split())
+                    # Thao tác xóa trực tiếp trên đám mây Supabase
+                    supabase.table("khach_hang").delete().eq("ten", ten_xoa_chuan).execute()
+                    supabase.table("lich_su_mua").delete().eq("ten_khach", ten_xoa_chuan).execute()
+                    st.success(f"💥 Đã xóa sạch khách hàng [{ten_xoa_chuan}] khỏi hệ thống đám mây!")
+                    st.rerun()
             
         st.write("---")
 
