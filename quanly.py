@@ -1,11 +1,10 @@
-import os
 import datetime
 import streamlit as st
 import pandas as pd
 import json
 import io
-
 # --- ĐOẠN CODE KẾT NỐI SUPABASE (ĐÃ ĐỒNG BỘ ĐÁM MAÂY) ---
+import os
 from supabase import create_client
 # Địa chỉ chính xác chứa Project ID của bạn
 SUPABASE_URL = "https://hyatrmkculrugytuvzeg.supabase.co"
@@ -22,7 +21,7 @@ st.sidebar.header("🔐 ĐĂNG NHẬP HỆ THỐNG")
 mat_khau = st.sidebar.text_input("Nhập mật khẩu truy cập:", type="password")
 
 # Cài đặt mật khẩu tùy ý bạn (Có thể sửa lại chữ trong ngoặc kép theo ý bạn)
-MAT_KHAU_ADMIN = "Huong1985@"   # Toàn quyền (Có nút Xóa)
+MAT_KHAU_ADMIN = "88888"   # Toàn quyền (Có nút Xóa)
 MAT_KHAU_THO   = "55555"   # Chỉ được xem và nhập liệu (Ẩn nút Xóa)
 
 # Biến kiểm soát quyền hạn trên toàn bộ ứng dụng
@@ -68,6 +67,7 @@ def lay_khung_html_a4(ten_chuan_hoa, sdt, diachi, rows_html, no_dau_ky, tong_pha
     tong_phat_sinh_int = chuyen_doi_so_an_toan(tong_phat_sinh)
     tong_da_tra_int = chuyen_doi_so_an_toan(tong_da_tra)
     tong_no_cuoi_ky_int = chuyen_doi_so_an_toan(tong_no_cuoi_ky)
+    ######################### Đoạn 2 ################################
     
     return f"""
     <div style="font-family: Arial, sans-serif; background-color: #fff; color: #000; max-width: 650px; margin: 0 auto; padding: 15px; border: 1px solid #000; box-sizing: border-box;">
@@ -125,7 +125,7 @@ def lay_khung_html_a4(ten_chuan_hoa, sdt, diachi, rows_html, no_dau_ky, tong_pha
         </div>
     </div>
     """
-
+#############################  Đoạn 3 #########################
 st.title("🏭 HỆ THỐNG QUẢN LÝ BÁN HÀNG & CÔNG NỢ SƠN TĨNH ĐIỆN")
 tab1, tab2 = st.tabs(["👤 CHI TIẾT KHÁCH HÀNG & IN ẤN", "📊 TỔNG HỢP CÔNG NỢ TOÀN XƯỞNG"])
 # =============================================================
@@ -458,7 +458,7 @@ with tab2:
                     "Nợ Hiện Tại (VNĐ)": row["Nợ Hiện Tại_RAW"]
                 })
                 stt_moi += 1
-
+###################### Đoạn 7 ##############
         st.markdown("### 🏪 Thống Kê Dòng Tiền Theo Bộ Lọc")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -507,15 +507,82 @@ with tab2:
                 "Đã Trả (VNĐ)": int(tong_xuong_da_tra),
                 "Nợ Hiện Tại (VNĐ)": int(tong_xuong_cong_no_hien_tai)
             })
-            
+            ###################################### chỉnh bảng exel #######################
+
             df = pd.DataFrame(bang_excel_raw)
             
             def convert_df_to_excel(df_data):
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df_data.to_excel(writer, index=False, sheet_name='Bao_Cao_Cong_No')
+                    # Ghi dữ liệu từ hàng số 9, bắt đầu ngay từ cột đầu tiên (Cột A)
+                    df_data.to_excel(writer, index=False, sheet_name='Bao_Cao_Cong_No', startrow=8, startcol=0)
+                    
+                    workbook  = writer.book
+                    worksheet = writer.sheets['Bao_Cao_Cong_No']
+                    
+                    # Ẩn toàn bộ đường lưới mặc định của Excel
+                    worksheet.hide_gridlines(2)
+                    
+                    # --- KHU VỰC TỰ CHỈNH CỠ CHỮ CHO TỪNG DÒNG THÔNG TIN XƯỞNG ---
+                    format_dong_1 = workbook.add_format({'bold': True, 'font_size': 26, 'color': '#000000', 'align': 'center', 'valign': 'vcenter'})
+                    format_dong_2 = workbook.add_format({'bold': False, 'font_size': 16, 'color': '#000000', 'align': 'center', 'valign': 'vcenter'})
+                    format_dong_3 = workbook.add_format({'bold': False, 'font_size': 16, 'color': '#000000', 'align': 'center', 'valign': 'vcenter'})
+                    format_dong_4 = workbook.add_format({'bold': True, 'font_size': 16, 'color': '#000000', 'align': 'center', 'valign': 'vcenter'})
+                    format_dong_5 = workbook.add_format({'bold': False, 'font_size': 16, 'color': '#000000', 'align': 'center', 'valign': 'vcenter'})
+                    format_dong_6 = workbook.add_format({'bold': True, 'font_size': 20, 'color': '#000000', 'align': 'center', 'valign': 'vcenter'})
+                    
+                    # Lệnh ghi từng dòng thông tin xưởng lên file Excel
+                    worksheet.merge_range('A1:H1', f"🏪 {TEN_CO_SO}", format_ten_xuong if 'format_ten_xuong' in locals() else format_dong_1)
+                    worksheet.merge_range('A2:H2', f"📞 Hotline/Zalo quản lý: {SDT_CHU_XUONG}", format_dong_2)
+                    worksheet.merge_range('A3:H3', f"📍 Địa chỉ: {DIA_CHI_XUONG}", format_dong_3)
+                    worksheet.merge_range('A4:H4', "💳 THÔNG TIN THANH TOÁN CHUYỂN KHOẢN:", format_dong_4)
+                    worksheet.merge_range('A5:H5', f"🏦 Ngân hàng: {TEN_NGAN_HANG} - Chủ TK: {TEN_CHU_TK}", format_dong_5)
+                    worksheet.merge_range('A6:H6', f"🔢 Số tài khoản: {STK_NGAN_HANG}", format_dong_6)
+                    
+                    # Định dạng viền kẻ caro đen mảnh áp dụng cho vùng dữ liệu bảng tính
+                    format_o_caro = workbook.add_format({
+                        'border': 1,
+                        'border_color': '#000000'
+                    })
+                    
+                    # Định dạng hàng tiêu đề bảng công nợ (STT, Khách Hàng...)
+                    format_tieu_de = workbook.add_format({
+                        'bold': True,
+                        'font_size': 13,
+                        'border': 1,
+                        'border_color': '#000000',
+                        'bg_color': '#F2F2F2',
+                        'align': 'center',
+                        'valign': 'vcenter'
+                    })
+                    
+                    # Ép chiều cao (28pt) cho hàng tiêu đề chuẩn
+                    worksheet.set_row(8, 28, format_tieu_de)
+                    
+                    # Tự động giãn rộng cột bắt đầu từ cột số 0 (Cột A)
+                    for i, col in enumerate(df_data.columns):
+                        max_len = max(df_data[col].astype(str).map(len).max(), len(str(col))) + 4
+                        if i == 0:
+                            max_len = 10
+                        worksheet.set_column(i, i, max_len)
+                    
+                    # ĐÃ SỬA CHUẨN XÁC: Quét định dạng vẽ viền bao phủ thêm 1 hàng nữa để ôm khít toàn bộ dòng TỔNG TOÀN HỆ THỐNG
+                    tong_so_hang_bao_gom_tongs = len(df_data) + 9  # Tăng vùng phủ dữ liệu bao quanh hàng đáy
+                    worksheet.conditional_format(8, 0, tong_so_hang_bao_gom_tongs, 7, {
+                        'type': 'no_errors',
+                        'format': format_o_caro
+                    })
+                        
+                    # --- ĐỘC QUYỀN CẤU HÌNH IN ẤN HOÀN HẢO CHO XƯỞNG ---
+                    worksheet.set_landscape()         
+                    worksheet.set_paper(9)            
+                    worksheet.fit_to_pages(1, 0)      
+                    worksheet.set_margins(left=0.4, right=0.4, top=0.4, bottom=0.4)
+                    worksheet.center_horizontally()
+                    
                 return output.getvalue()
-                
+
+            # --- ĐOẠN CODE TẠO NÚT BẤM XUẤT FILE ---
             excel_data = convert_df_to_excel(df)
             ngay_tai_file = datetime.datetime.now().strftime("%d/%m/%Y")
             
