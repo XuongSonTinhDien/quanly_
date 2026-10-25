@@ -22,7 +22,7 @@ mat_khau = st.sidebar.text_input("Nhập mật khẩu truy cập:", type="passwo
 
 # Cài đặt mật khẩu tùy ý bạn (Có thể sửa lại chữ trong ngoặc kép theo ý bạn)
 MAT_KHAU_ADMIN = "88888"   # Toàn quyền (Có nút Xóa)
-MAT_KHAU_THO   = "55555"   # Chỉ được xem và nhập liệu (Ẩn nút Xóa)
+MAT_KHAU_THO   = "5"   # Chỉ được xem và nhập liệu (Ẩn nút Xóa)
 
 # Biến kiểm soát quyền hạn trên toàn bộ ứng dụng
 quyen_admin = False
