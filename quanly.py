@@ -105,7 +105,7 @@ def lay_khung_html_a4(ten_chuan_hoa, sdt, diachi, rows_html, no_dau_ky, tong_pha
     </div>
     """
 #############################  Đoạn 3 #########################
-st.title("🏭 HỆ THỐNG QUẢN LÝ BÁN HÀNG & CÔNG NỢ SƠN TĨNH ĐIỆN")
+st.title("🏭 HỆ THỐNG QUẢN LÝ BÁN HÀNG & CÔNG NỢ")
 tab1, tab2 = st.tabs(["👤 CHI TIẾT KHÁCH HÀNG & IN ẤN", "📊 TỔNG HỢP CÔNG NỢ TOÀN XƯỞNG"])
 # =============================================================
 # TAB 1: CHI TIẾT KHÁCH HÀNG & IN ẤN
@@ -206,7 +206,7 @@ with tab1:
                 
                 if loai_gd == "Mua hàng":
                     ten_hang = st.text_input("Tên hàng / Nội dung công việc:", value="trắng")
-                    dvt = st.selectbox("Đơn vị tính (ĐVT):", ["kg", "mét", "cái", "Bộ", "lượt"])
+                    dvt = st.selectbox("Đơn vị tính (ĐVT):", ["kg", "mét", "cái", "Bộ", "lượt", "Tấm", "Chuyến", "Công", "KW"])
                     dongia = st.number_input("Đơn giá (VNĐ) - Tự điền tay:", min_value=0.0, step=500.0, value=8000.0, format="%.0f")
                     soluong = st.number_input("Số lượng mua:", min_value=0.0, step=1.0, value=1.0, format="%.1f")
                     thanh_tien_tam_tinh = int(dongia * soluong)
