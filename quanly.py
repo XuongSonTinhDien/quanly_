@@ -207,7 +207,7 @@ with tab1:
                 if loai_gd == "Mua hàng":
                     ten_hang = st.text_input("Tên hàng / Nội dung công việc:", value="trắng")
                     dvt = st.selectbox("Đơn vị tính (ĐVT):", ["kg", "mét", "cái", "Bộ", "lượt"])
-                    dongia = st.selectbox("Đơn giá:", [8000.0, 11000.0, 12000.0, 14000.0, 15000.0, 10000.0, 9000.0, 7000.0, 6000.0, 5000.0, 4500.0, 4000.0, 3000.0, 2000.0, 1000.0])
+                    dongia = st.number_input("Đơn giá (VNĐ) - Tự điền tay:", min_value=0.0, step=500.0, value=8000.0, format="%.0f")
                     soluong = st.number_input("Số lượng mua:", min_value=0.0, step=1.0, value=1.0, format="%.1f")
                     thanh_tien_tam_tinh = int(dongia * soluong)
                     st.markdown(f"👉 **Thành tiền mặt hàng (Dự kiến):** <span style='color:blue; font-size:16px;'>{thanh_tien_tam_tinh:,} VNĐ</span>", unsafe_allow_html=True)
