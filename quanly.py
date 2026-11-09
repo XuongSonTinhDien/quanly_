@@ -151,7 +151,7 @@ with tab1:
         
         sdt_mac_dinh, diachi_mac_dinh, nocu_mac_dinh = "", "", 0.0
         khach_cu = False
-        ten_chuan_hoa = "tuyển k1"
+        ten_chuan_hoa = "Khách lẻ"
 
         if lua_chon_khach != "-- Chọn khách hàng sẵn có --" and lua_chon_khach != "➕ THÊM KHÁCH HÀNG MỚI HOÀN TOÀN":
             ten_chuan_hoa = lua_chon_khach
